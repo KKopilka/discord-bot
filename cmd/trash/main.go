@@ -3,7 +3,11 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -33,19 +37,30 @@ func main() {
 	}
 
 	fmt.Println("Привет!")
-	guilds, err := goBot.UserGuilds(100, "", "")
-
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-
-	for _, guild := range guilds {
-		fmt.Println(guild.Name, guild.ID)
-		if err := removeTrash(goBot, guild.ID); err != nil {
-			fmt.Println(err.Error())
+	ticker := time.NewTicker(30 * time.Second)
+	done := make(chan bool)
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			case t := <-ticker.C:
+				fmt.Println("Tick at", t)
+				err = processGuilds(goBot)
+				if err != nil {
+					fmt.Println(err.Error())
+					return
+				}
+			}
 		}
-	}
+	}()
+
+	stopch := make(chan os.Signal, 1)
+	signal.Notify(stopch, os.Interrupt, syscall.SIGTERM)
+	<-stopch
+
+	ticker.Stop()
+	done <- true
 
 }
 
@@ -101,5 +116,21 @@ func readBotToken() error {
 	}
 
 	discordBotToken = string(file)
+	return nil
+}
+
+func processGuilds(goBot *discordgo.Session) error {
+	guilds, err := goBot.UserGuilds(100, "", "")
+
+	if err != nil {
+		return err
+	}
+
+	for _, guild := range guilds {
+		fmt.Println(guild.Name, guild.ID)
+		if err := removeTrash(goBot, guild.ID); err != nil {
+			fmt.Println(err.Error())
+		}
+	}
 	return nil
 }
