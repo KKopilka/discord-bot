@@ -3,12 +3,14 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/KKopilka/discord-bot/internal/commands"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -30,11 +32,21 @@ func main() {
 		return
 	}
 
+	commands.BindCommandHandlers(goBot)
+
 	err = goBot.Open()
 	if err != nil {
 		fmt.Println(err.Error())
 		return
 	}
+	defer goBot.Close()
+
+	for _, guild := range Guilds(goBot) {
+		commands.UnregisterAllGuildCommands(goBot, guild.ID)
+		commands.RegisterBotCommands(goBot, guild.ID)
+	}
+	// TODO: unregister commands only for selected guild
+	defer commands.UnregisterBotCommands(goBot)
 
 	fmt.Println("Привет!")
 	ticker := time.NewTicker(30 * time.Second)
@@ -117,6 +129,15 @@ func readBotToken() error {
 
 	discordBotToken = string(file)
 	return nil
+}
+
+func Guilds(goBot *discordgo.Session) []*discordgo.UserGuild {
+	guilds, err := goBot.UserGuilds(100, "", "")
+	if err != nil {
+		log.Fatalf("err: %w", err)
+	}
+
+	return guilds
 }
 
 func processGuilds(goBot *discordgo.Session) error {
