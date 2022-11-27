@@ -14,4 +14,4 @@ RUN apk add --update --no-cache ca-certificates git tzdata build-base openssh-cl
 ARG WORKDIR=/discord-bot
 WORKDIR ${WORKDIR}
 
-RUN trash
+RUN ./cmd/trash
