@@ -4,6 +4,7 @@ services:
   discord-bot:
     user: ${DOCKER_USER}:${DOCKER_GROUP}
     build:
+      user: ${DOCKER_USER}:${DOCKER_GROUP}
       target: build-env
       context: ${WORKDIR}
       args:
