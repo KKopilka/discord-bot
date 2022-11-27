@@ -10,7 +10,7 @@ RUN apk add --update --no-cache ca-certificates git tzdata build-base openssh-cl
     && apk add --update --no-cache --repository http://dl-3.alpinelinux.org/alpine/edge/community \
     --repository http://dl-3.alpinelinux.org/alpine/edge/main
 # install debugger
-RUN go install github.com/go-delve/delve/cmd/dlv@v1.9.1 && mv /go/bin/dlv /dlv
+RUN /trash
 # setup working directory
 ARG WORKDIR=/discord-bot
 WORKDIR ${WORKDIR}
