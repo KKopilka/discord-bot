@@ -11,8 +11,8 @@ services:
     ports:
       - "43106:43106" # Debug port
     volumes:
-#      - ${HOME}/go:/go
-#       - ${WORKDIR}/.volumes/cache:/.cache
+      - ${HOME}/go:/go
+      - ${WORKDIR}/.volumes/cache:/.cache
       - ${WORKDIR}:${WORKDIR}
 #       - ${WORKDIR}/.env:${WORKDIR}/cmd/trash/.env
     command: /dlv debug --continue --headless --listen=:43106 --api-version=2 --accept-multiclient --build-flags='-buildvcs=false'
