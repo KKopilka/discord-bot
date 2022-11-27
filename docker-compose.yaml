@@ -11,7 +11,7 @@ services:
     ports:
       - "43106:43106" # Debug port
     volumes:
-      - ${HOME}/go:/go
+#      - ${HOME}/go:/go
 #       - ${WORKDIR}/.volumes/cache:/.cache
       - ${WORKDIR}:${WORKDIR}
 #       - ${WORKDIR}/.env:${WORKDIR}/cmd/trash/.env
