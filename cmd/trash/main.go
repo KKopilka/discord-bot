@@ -27,9 +27,15 @@ func main() {
 		return
 	}
 
+	fmt.Println("Configuration readed successfully")
 	// 2. Структура сервиса бота пакет service
 	botService, err := service.New(discordBotToken)
 	defer botService.Stop()
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+	fmt.Println("Bot service started", "bot.id:", botService.BotId())
 
 	// 3. Рутинные задачи бота
 	ticker := time.NewTicker(5 * time.Second)
@@ -50,6 +56,7 @@ func main() {
 			}
 		}
 	}()
+	fmt.Println("action:trash started")
 
 	go func() {
 		for {
@@ -66,10 +73,12 @@ func main() {
 			}
 		}
 	}()
+	fmt.Println("action:polls started")
 
 	// ожидание закрытия программы
 	stopch := make(chan os.Signal, 1)
-	signal.Notify(stopch, os.Interrupt, syscall.SIGTERM)
+	fmt.Println("Waiting for SIGTERM")
+	signal.Notify(stopch, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	<-stopch
 
 	// остановка программы, тикеров и циклов го-рутин
@@ -171,18 +180,20 @@ func checkThreads(goBot *discordgo.Session, guildID string) error {
 	}
 
 	for _, thread := range threads.Threads {
-		fmt.Println("Thread", thread.Name, thread.ID, thread.Type)
-		transformPolls(goBot, thread)
+		fmt.Println("Thread", thread.Name, thread.ID, thread.Type, thread.LastMessageID)
+		if err := transformPolls(goBot, thread); err != nil {
+			fmt.Println(err.Error())
+		}
 	}
 	return nil
 }
 
 func transformPolls(goBot *discordgo.Session, channel *discordgo.Channel) error {
 	messages, err := goBot.ChannelMessages(channel.ID, 10, "", "", channel.LastMessageID)
-
 	if err != nil {
 		return err
 	}
+	fmt.Println("ChannelMessages", "id", channel.ID, "last.id", channel.LastMessageID, "len", len(messages))
 
 	for _, message := range messages {
 		if botID != "" && message.Author.ID != botID {
