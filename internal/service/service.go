@@ -52,6 +52,15 @@ func New(botToken string) (*Service, error) {
 	return service, nil
 }
 
+func (s *Service) BotId() string {
+	// return empty string if user not loaded
+	if s.botUser == nil {
+		return ""
+	}
+
+	return s.botUser.ID
+}
+
 // BotSession is temporary. TODO: delete after actions implemented
 func (s *Service) BotSession() *discordgo.Session {
 	return s.botSession
