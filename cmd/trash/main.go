@@ -15,8 +15,6 @@ import (
 
 var discordBotToken string
 
-var botID string
-
 const WasteBasketEmoji = "🗑"
 
 func main() {
@@ -165,15 +163,15 @@ func checkPolls(s *service.Service) error {
 			continue
 		}
 		// fmt.Println(guild.Name, guild.ID)
-		if err := checkThreads(s.BotSession(), guild.ID); err != nil {
+		if err := checkThreads(s, guild.ID); err != nil {
 			fmt.Println(err.Error())
 		}
 	}
 	return nil
 }
 
-func checkThreads(goBot *discordgo.Session, guildID string) error {
-	threads, err := goBot.GuildThreadsActive(guildID)
+func checkThreads(s *service.Service, guildID string) error {
+	threads, err := s.BotSession().GuildThreadsActive(guildID)
 
 	if err != nil {
 		return err
@@ -181,39 +179,39 @@ func checkThreads(goBot *discordgo.Session, guildID string) error {
 
 	for _, thread := range threads.Threads {
 		fmt.Println("Thread", thread.Name, thread.ID, thread.Type, thread.LastMessageID)
-		if err := transformPolls(goBot, thread); err != nil {
+		if err := transformPolls(s, thread); err != nil {
 			fmt.Println(err.Error())
 		}
 	}
 	return nil
 }
 
-func transformPolls(goBot *discordgo.Session, channel *discordgo.Channel) error {
-	messages, err := goBot.ChannelMessages(channel.ID, 10, "", "", channel.LastMessageID)
+func transformPolls(s *service.Service, channel *discordgo.Channel) error {
+	messages, err := s.BotSession().ChannelMessages(channel.ID, 10, "", "", channel.LastMessageID)
 	if err != nil {
 		return err
 	}
 	fmt.Println("ChannelMessages", "id", channel.ID, "last.id", channel.LastMessageID, "len", len(messages))
 
 	for _, message := range messages {
-		if botID != "" && message.Author.ID != botID {
+		if s.BotId() != "" && message.Author.ID != s.BotId() {
 			fmt.Println("tm", message.ID, message.Author, message.Timestamp, message.Content)
 
 			if strings.Index(message.Content, "https://steamcommunity.com/") >= 0 {
 
-				if err := createPoll(goBot, message.ChannelID, message.Content); err != nil {
+				if err := createPoll(s.BotSession(), message.ChannelID, message.Content); err != nil {
 					fmt.Println(err.Error())
 					continue
 				}
 
 			} else {
-				if err := notifyAuthor(goBot, message); err != nil {
+				if err := notifyAuthor(s.BotSession(), message); err != nil {
 					fmt.Println(err.Error())
 					continue
 				}
 			}
 
-			if err := goBot.ChannelMessageDelete(message.ChannelID, message.ID); err != nil {
+			if err := s.BotSession().ChannelMessageDelete(message.ChannelID, message.ID); err != nil {
 				fmt.Println(err.Error())
 				continue
 			}
