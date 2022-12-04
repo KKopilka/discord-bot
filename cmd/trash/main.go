@@ -3,14 +3,13 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/KKopilka/discord-bot/internal/commands"
+	"github.com/KKopilka/discord-bot/internal/service"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -18,9 +17,13 @@ var discordBotToken string
 
 var botID string
 
+// Гильдии о которых знает бот (где он тусуется)
+var botGuilds []*discordgo.UserGuild
+
 const WasteBasketEmoji = "🗑"
 
 func main() {
+	// 1. Загрузка конфигурации пакет config
 	err := readBotToken()
 
 	if err != nil {
@@ -28,37 +31,10 @@ func main() {
 		return
 	}
 
-	goBot, err := discordgo.New("Bot " + discordBotToken)
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-  
-	user, err := goBot.User("@me")
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
+	// 2. Структура сервиса бота пакет service
+	botService, err := service.New(discordBotToken)
+	defer botService.Stop()
 
-	botID = user.ID
-  
-  commands.BindCommandHandlers(goBot)
-
-	err = goBot.Open()
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-	defer goBot.Close()
-
-	for _, guild := range Guilds(goBot) {
-		commands.UnregisterAllGuildCommands(goBot, guild.ID)
-		commands.RegisterBotCommands(goBot, guild.ID)
-	}
-	// TODO: unregister commands only for selected guild
-	defer commands.UnregisterBotCommands(goBot)
-
-	fmt.Println("Привет!")
 	ticker := time.NewTicker(5 * time.Second)
 	ticker2 := time.NewTicker(10 * time.Second)
 	done := make(chan bool)
@@ -69,7 +45,7 @@ func main() {
 				return
 			case t := <-ticker.C:
 				fmt.Println("Tick1 at", t)
-				err = processGuilds(goBot)
+				err = processGuilds(botService.BotSession())
 				if err != nil {
 					fmt.Println(err.Error())
 					return
@@ -85,7 +61,7 @@ func main() {
 				return
 			case t := <-ticker2.C:
 				fmt.Println("Tick2 at", t)
-				err = checkPolls(goBot)
+				err = checkPolls(botService.BotSession())
 				if err != nil {
 					fmt.Println(err.Error())
 					return
@@ -158,23 +134,14 @@ func readBotToken() error {
 	return nil
 }
 
-func Guilds(goBot *discordgo.Session) []*discordgo.UserGuild {
-	guilds, err := goBot.UserGuilds(100, "", "")
-	if err != nil {
-		log.Fatalf("err: %w", err)
-	}
-
-	return guilds
-}
-
 func processGuilds(goBot *discordgo.Session) error {
-	guilds, err := goBot.UserGuilds(100, "", "")
+	// guilds, err := goBot.UserGuilds(100, "", "")
 
-	if err != nil {
-		return err
-	}
+	// if err != nil {
+	// 	return err
+	// }
 
-	for _, guild := range guilds {
+	for _, guild := range botGuilds {
 		// fmt.Println(guild.Name, guild.ID)
 		if err := removeTrash(goBot, guild.ID); err != nil {
 			fmt.Println(err.Error())
@@ -184,17 +151,11 @@ func processGuilds(goBot *discordgo.Session) error {
 }
 
 func checkPolls(goBot *discordgo.Session) error {
-	guilds, err := goBot.UserGuilds(100, "", "")
-
-	if err != nil {
-		return err
-	}
-
-	for _, guild := range guilds {
-		// fmt.Println(guild.Name, guild.ID)
-		if err := checkThreads(goBot, guild.ID); err != nil {
-			fmt.Println(err.Error())
-		}
+	for _, guild := range botGuilds {
+		fmt.Println(guild.Name, guild.ID)
+		// if err := checkThreads(goBot, guild.ID); err != nil {
+		// 	fmt.Println(err.Error())
+		// }
 	}
 	return nil
 }
