@@ -39,7 +39,7 @@ func New(botToken string) (*Service, error) {
 	}
 
 	// TODO: periodic update
-	botGuilds, err := FetchSessionGuilds(goBot)
+	botGuilds, err := FetchSessionGuilds(service.botSession)
 	if err != nil {
 		service.CloseSession()
 		return nil, err
@@ -55,6 +55,12 @@ func New(botToken string) (*Service, error) {
 // BotSession is temporary. TODO: delete after actions implemented
 func (s *Service) BotSession() *discordgo.Session {
 	return s.botSession
+}
+
+// BotGuilds returns slice of current bot joined guilds.
+func (s *Service) BotGuilds() []*discordgo.UserGuild {
+	// cached!
+	return s.botGuilds
 }
 
 func (s *Service) RegisterBotCommands() {

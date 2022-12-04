@@ -17,15 +17,11 @@ var discordBotToken string
 
 var botID string
 
-// Гильдии о которых знает бот (где он тусуется)
-var botGuilds []*discordgo.UserGuild
-
 const WasteBasketEmoji = "🗑"
 
 func main() {
 	// 1. Загрузка конфигурации пакет config
 	err := readBotToken()
-
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -35,6 +31,7 @@ func main() {
 	botService, err := service.New(discordBotToken)
 	defer botService.Stop()
 
+	// 3. Рутинные задачи бота
 	ticker := time.NewTicker(5 * time.Second)
 	ticker2 := time.NewTicker(10 * time.Second)
 	done := make(chan bool)
@@ -45,7 +42,7 @@ func main() {
 				return
 			case t := <-ticker.C:
 				fmt.Println("Tick1 at", t)
-				err = processGuilds(botService.BotSession())
+				err = processGuilds(botService)
 				if err != nil {
 					fmt.Println(err.Error())
 					return
@@ -61,7 +58,7 @@ func main() {
 				return
 			case t := <-ticker2.C:
 				fmt.Println("Tick2 at", t)
-				err = checkPolls(botService.BotSession())
+				err = checkPolls(botService)
 				if err != nil {
 					fmt.Println(err.Error())
 					return
@@ -70,10 +67,12 @@ func main() {
 		}
 	}()
 
+	// ожидание закрытия программы
 	stopch := make(chan os.Signal, 1)
 	signal.Notify(stopch, os.Interrupt, syscall.SIGTERM)
 	<-stopch
 
+	// остановка программы, тикеров и циклов го-рутин
 	ticker.Stop()
 	done <- true
 
@@ -134,28 +133,32 @@ func readBotToken() error {
 	return nil
 }
 
-func processGuilds(goBot *discordgo.Session) error {
+func processGuilds(s *service.Service) error {
 	// guilds, err := goBot.UserGuilds(100, "", "")
 
 	// if err != nil {
 	// 	return err
 	// }
 
-	for _, guild := range botGuilds {
+	for _, guild := range s.BotGuilds() {
 		// fmt.Println(guild.Name, guild.ID)
-		if err := removeTrash(goBot, guild.ID); err != nil {
+		if err := removeTrash(s.BotSession(), guild.ID); err != nil {
 			fmt.Println(err.Error())
 		}
 	}
 	return nil
 }
 
-func checkPolls(goBot *discordgo.Session) error {
-	for _, guild := range botGuilds {
-		fmt.Println(guild.Name, guild.ID)
-		// if err := checkThreads(goBot, guild.ID); err != nil {
-		// 	fmt.Println(err.Error())
-		// }
+func checkPolls(s *service.Service) error {
+	for _, guild := range s.BotGuilds() {
+		// ignore this guild for some good times
+		if guild.ID == "695782620793012225" {
+			continue
+		}
+		// fmt.Println(guild.Name, guild.ID)
+		if err := checkThreads(s.BotSession(), guild.ID); err != nil {
+			fmt.Println(err.Error())
+		}
 	}
 	return nil
 }
