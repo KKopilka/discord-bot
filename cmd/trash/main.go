@@ -25,9 +25,9 @@ func main() {
 		return
 	}
 
-	fmt.Println("Configuration readed successfully")
+	fmt.Println("Configuration readed successfully. Create and start bot service.")
 	// 2. Структура сервиса бота пакет service
-	botService, err := service.New(discordBotToken)
+	botService, err := service.New(discordBotToken, true)
 	defer botService.Stop()
 	if err != nil {
 		fmt.Println(err.Error())
@@ -38,11 +38,17 @@ func main() {
 	// 3. Рутинные задачи бота
 	ticker := time.NewTicker(5 * time.Second)
 	ticker2 := time.NewTicker(10 * time.Second)
+
+	// Отдельно создаем каналы завершения для каждой рутины,
+	// потому что иначе, нужно контролировать кол-во сигналов <-done,
+	// для завершения ВСЕХ созданных рутин при завершении приложения
 	done := make(chan bool)
+	done2 := make(chan bool)
 	go func() {
 		for {
 			select {
 			case <-done:
+				fmt.Println("Tick1 done")
 				return
 			case t := <-ticker.C:
 				fmt.Println("Tick1 at", t)
@@ -59,7 +65,8 @@ func main() {
 	go func() {
 		for {
 			select {
-			case <-done:
+			case <-done2:
+				fmt.Println("Tick2 done")
 				return
 			case t := <-ticker2.C:
 				fmt.Println("Tick2 at", t)
@@ -78,11 +85,19 @@ func main() {
 	fmt.Println("Waiting for SIGTERM")
 	signal.Notify(stopch, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	<-stopch
-
+	fmt.Println("SIGTERM received")
 	// остановка программы, тикеров и циклов го-рутин
+	// Сначала останавливаем ТАЙМЕР, затем рутину.
+	//
 	ticker.Stop()
+	fmt.Println("Ticker1 stopped")
 	done <- true
 
+	ticker2.Stop()
+	fmt.Println("Ticker2 stopped")
+	done2 <- true
+
+	fmt.Println("Good bye honney")
 }
 
 func removeTrash(goBot *discordgo.Session, guildID string) error {
