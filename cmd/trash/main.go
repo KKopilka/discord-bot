@@ -3,73 +3,56 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/KKopilka/discord-bot/internal/commands"
+	"github.com/KKopilka/discord-bot/internal/service"
 	"github.com/bwmarrin/discordgo"
 )
 
 var discordBotToken string
 
-var botID string
-
 const WasteBasketEmoji = "🗑"
 
 func main() {
+	// 1. Загрузка конфигурации пакет config
 	err := readBotToken()
-
 	if err != nil {
 		fmt.Println(err.Error())
 		return
 	}
 
-	goBot, err := discordgo.New("Bot " + discordBotToken)
+	fmt.Println("Configuration readed successfully. Create and start bot service.")
+	// 2. Структура сервиса бота пакет service
+	botService, err := service.New(discordBotToken, true)
+	defer botService.Stop()
 	if err != nil {
 		fmt.Println(err.Error())
 		return
 	}
-  
-	user, err := goBot.User("@me")
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
+	fmt.Println("Bot service started", "bot.id:", botService.BotId())
 
-	botID = user.ID
-  
-  commands.BindCommandHandlers(goBot)
-
-	err = goBot.Open()
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-	defer goBot.Close()
-
-	for _, guild := range Guilds(goBot) {
-		commands.UnregisterAllGuildCommands(goBot, guild.ID)
-		commands.RegisterBotCommands(goBot, guild.ID)
-	}
-	// TODO: unregister commands only for selected guild
-	defer commands.UnregisterBotCommands(goBot)
-
-	fmt.Println("Привет!")
+	// 3. Рутинные задачи бота
 	ticker := time.NewTicker(5 * time.Second)
 	ticker2 := time.NewTicker(10 * time.Second)
+
+	// Отдельно создаем каналы завершения для каждой рутины,
+	// потому что иначе, нужно контролировать кол-во сигналов <-done,
+	// для завершения ВСЕХ созданных рутин при завершении приложения
 	done := make(chan bool)
+	done2 := make(chan bool)
 	go func() {
 		for {
 			select {
 			case <-done:
+				fmt.Println("Tick1 done")
 				return
 			case t := <-ticker.C:
 				fmt.Println("Tick1 at", t)
-				err = processGuilds(goBot)
+				err = processGuilds(botService)
 				if err != nil {
 					fmt.Println(err.Error())
 					return
@@ -77,15 +60,17 @@ func main() {
 			}
 		}
 	}()
+	fmt.Println("action:trash started")
 
 	go func() {
 		for {
 			select {
-			case <-done:
+			case <-done2:
+				fmt.Println("Tick2 done")
 				return
 			case t := <-ticker2.C:
 				fmt.Println("Tick2 at", t)
-				err = checkPolls(goBot)
+				err = checkPolls(botService)
 				if err != nil {
 					fmt.Println(err.Error())
 					return
@@ -93,14 +78,26 @@ func main() {
 			}
 		}
 	}()
+	fmt.Println("action:polls started")
 
+	// ожидание закрытия программы
 	stopch := make(chan os.Signal, 1)
-	signal.Notify(stopch, os.Interrupt, syscall.SIGTERM)
+	fmt.Println("Waiting for SIGTERM")
+	signal.Notify(stopch, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	<-stopch
-
+	fmt.Println("SIGTERM received")
+	// остановка программы, тикеров и циклов го-рутин
+	// Сначала останавливаем ТАЙМЕР, затем рутину.
+	//
 	ticker.Stop()
+	fmt.Println("Ticker1 stopped")
 	done <- true
 
+	ticker2.Stop()
+	fmt.Println("Ticker2 stopped")
+	done2 <- true
+
+	fmt.Println("Good bye honney")
 }
 
 func removeTrash(goBot *discordgo.Session, guildID string) error {
@@ -158,87 +155,78 @@ func readBotToken() error {
 	return nil
 }
 
-func Guilds(goBot *discordgo.Session) []*discordgo.UserGuild {
-	guilds, err := goBot.UserGuilds(100, "", "")
-	if err != nil {
-		log.Fatalf("err: %w", err)
-	}
+func processGuilds(s *service.Service) error {
+	// guilds, err := goBot.UserGuilds(100, "", "")
 
-	return guilds
-}
+	// if err != nil {
+	// 	return err
+	// }
 
-func processGuilds(goBot *discordgo.Session) error {
-	guilds, err := goBot.UserGuilds(100, "", "")
-
-	if err != nil {
-		return err
-	}
-
-	for _, guild := range guilds {
+	for _, guild := range s.BotGuilds() {
 		// fmt.Println(guild.Name, guild.ID)
-		if err := removeTrash(goBot, guild.ID); err != nil {
+		if err := removeTrash(s.BotSession(), guild.ID); err != nil {
 			fmt.Println(err.Error())
 		}
 	}
 	return nil
 }
 
-func checkPolls(goBot *discordgo.Session) error {
-	guilds, err := goBot.UserGuilds(100, "", "")
-
-	if err != nil {
-		return err
-	}
-
-	for _, guild := range guilds {
+func checkPolls(s *service.Service) error {
+	for _, guild := range s.BotGuilds() {
+		// ignore this guild for some good times
+		if guild.ID == "695782620793012225" {
+			continue
+		}
 		// fmt.Println(guild.Name, guild.ID)
-		if err := checkThreads(goBot, guild.ID); err != nil {
+		if err := checkThreads(s, guild.ID); err != nil {
 			fmt.Println(err.Error())
 		}
 	}
 	return nil
 }
 
-func checkThreads(goBot *discordgo.Session, guildID string) error {
-	threads, err := goBot.GuildThreadsActive(guildID)
+func checkThreads(s *service.Service, guildID string) error {
+	threads, err := s.BotSession().GuildThreadsActive(guildID)
 
 	if err != nil {
 		return err
 	}
 
 	for _, thread := range threads.Threads {
-		fmt.Println("Thread", thread.Name, thread.ID, thread.Type)
-		transformPolls(goBot, thread)
+		fmt.Println("Thread", thread.Name, thread.ID, thread.Type, thread.LastMessageID)
+		if err := transformPolls(s, thread); err != nil {
+			fmt.Println(err.Error())
+		}
 	}
 	return nil
 }
 
-func transformPolls(goBot *discordgo.Session, channel *discordgo.Channel) error {
-	messages, err := goBot.ChannelMessages(channel.ID, 10, "", "", channel.LastMessageID)
-
+func transformPolls(s *service.Service, channel *discordgo.Channel) error {
+	messages, err := s.BotSession().ChannelMessages(channel.ID, 10, "", "", channel.LastMessageID)
 	if err != nil {
 		return err
 	}
+	fmt.Println("ChannelMessages", "id", channel.ID, "last.id", channel.LastMessageID, "len", len(messages))
 
 	for _, message := range messages {
-		if botID != "" && message.Author.ID != botID {
+		if s.BotId() != "" && message.Author.ID != s.BotId() {
 			fmt.Println("tm", message.ID, message.Author, message.Timestamp, message.Content)
 
 			if strings.Index(message.Content, "https://steamcommunity.com/") >= 0 {
 
-				if err := createPoll(goBot, message.ChannelID, message.Content); err != nil {
+				if err := createPoll(s.BotSession(), message.ChannelID, message.Content); err != nil {
 					fmt.Println(err.Error())
 					continue
 				}
 
 			} else {
-				if err := notifyAuthor(goBot, message); err != nil {
+				if err := notifyAuthor(s.BotSession(), message); err != nil {
 					fmt.Println(err.Error())
 					continue
 				}
 			}
 
-			if err := goBot.ChannelMessageDelete(message.ChannelID, message.ID); err != nil {
+			if err := s.BotSession().ChannelMessageDelete(message.ChannelID, message.ID); err != nil {
 				fmt.Println(err.Error())
 				continue
 			}
