@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -28,11 +29,12 @@ func main() {
 	fmt.Println("Configuration readed successfully. Create and start bot service.", discordBotToken, "lol")
 	// 2. Структура сервиса бота пакет service
 	botService, err := service.New(discordBotToken, true)
-	defer botService.Stop()
 	if err != nil {
 		fmt.Println(err.Error())
 		return
 	}
+	defer botService.Stop()
+
 	fmt.Println("Bot service started", "bot.id:", botService.BotId())
 
 	// 3. Рутинные задачи бота
@@ -144,6 +146,34 @@ func IsChannelNeedToClean(channelName string) bool {
 	return false
 }
 
+type DiscordBotToken string
+
+func (bt *DiscordBotToken) Sanitize() {
+	content := string(*bt)
+	content = strings.Trim(content, " \n\r\t")
+	// TODO: check bot-token specification for whitespaces inside it.
+	content = strings.ReplaceAll(content, " ", "")
+
+	*bt = DiscordBotToken(content)
+}
+
+func (bt DiscordBotToken) Validate() error {
+	content := string(bt)
+
+	if strings.Contains(content, " ") {
+		return errors.New("whitespace in bot-token")
+	}
+	if strings.Contains(content, "\n") {
+		return errors.New("end of line in bot-token")
+	}
+
+	if len(content) != 72 {
+		return errors.New(fmt.Sprintln("invalid bot-token. Token length:", len(content)))
+	}
+
+	return nil
+}
+
 func readBotToken() error {
 	file, err := ioutil.ReadFile("bot-token")
 
@@ -151,7 +181,15 @@ func readBotToken() error {
 		return err
 	}
 
-	discordBotToken = string(file)
+	botToken := DiscordBotToken(string(file))
+	botToken.Sanitize()
+
+	if err := botToken.Validate(); err != nil {
+		return err
+	}
+
+	discordBotToken = string(botToken)
+
 	return nil
 }
 
