@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/KKopilka/discord-bot/internal/commands"
 	"github.com/bwmarrin/discordgo"
@@ -13,6 +14,7 @@ type Service struct {
 	botUser                     *discordgo.User
 	botGuilds                   []*discordgo.UserGuild
 	registerBotCommandsInGuilds bool
+	actionTasks                 []*ActionTask
 }
 
 // New create and start new service
@@ -101,9 +103,27 @@ func (s *Service) CloseSession() error {
 }
 
 func (s *Service) Stop() error {
+	// stop actions tasks
+	runnedActions := s.actionTasks
+	for _, at := range runnedActions {
+		at.Stop()
+		fmt.Println("Stopped task for action:", at.ActFuncName())
+
+	}
+
 	if s.registerBotCommandsInGuilds {
 		commands.UnregisterBotCommands(s.botSession)
 	}
 
 	return s.CloseSession()
+}
+
+func (s *Service) RunAction(act Action, d time.Duration) error {
+	at := NewActionTask(act, d)
+	at.Run(s)
+	fmt.Println("Added task for action:", at.ActFuncName(), "ticker:", d)
+
+	s.actionTasks = append(s.actionTasks, at)
+
+	return nil
 }
