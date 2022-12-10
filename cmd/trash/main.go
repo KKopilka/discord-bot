@@ -121,13 +121,23 @@ func removeTrash(goBot *discordgo.Session, guildID string) error {
 
 			if len(messages) > 3 {
 				messageToDelete := []string{}
+				messageToDeleteBulk := []string{}
 				for _, message := range messages {
-					messageToDelete = append(messageToDelete, message.ID)
+					if message.Timestamp.Sub(time.Now().Add(time.Hour*24*-14)) >= 0 {
+						messageToDeleteBulk = append(messageToDeleteBulk, message.ID)
+					} else {
+						messageToDelete = append(messageToDelete, message.ID)
+					}
 				}
 
-				if err := goBot.ChannelMessagesBulkDelete(channel.ID, messageToDelete); err != nil {
+				if err := goBot.ChannelMessagesBulkDelete(channel.ID, messageToDeleteBulk); err != nil {
 					fmt.Println(err.Error())
-					continue
+				}
+
+				for _, messageID := range messageToDelete {
+					if err := goBot.ChannelMessageDelete(channel.ID, messageID); err != nil {
+						fmt.Println(err.Error())
+					}
 				}
 			}
 		}
