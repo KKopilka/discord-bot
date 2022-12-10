@@ -25,7 +25,7 @@ func main() {
 		return
 	}
 
-	fmt.Println("Configuration readed successfully. Create and start bot service.")
+	fmt.Println("Configuration readed successfully. Create and start bot service.", discordBotToken, "lol")
 	// 2. Структура сервиса бота пакет service
 	botService, err := service.New(discordBotToken, true)
 	defer botService.Stop()
