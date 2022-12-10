@@ -9,8 +9,7 @@ import (
 
 	"github.com/KKopilka/discord-bot/internal/config"
 	"github.com/KKopilka/discord-bot/internal/service"
-	"github.com/KKopilka/discord-bot/internal/service/polls"
-	"github.com/KKopilka/discord-bot/internal/service/trash"
+	rollsassign "github.com/KKopilka/discord-bot/internal/service/rolls-assign"
 )
 
 func main() {
@@ -33,8 +32,9 @@ func main() {
 
 	fmt.Println("Bot service started", "bot.id:", botService.BotId())
 	// 3. Рутинные задачи бота
-	botService.RunAction(trash.NewAction(), 5*time.Second)
-	botService.RunAction(polls.NewAction(), 10*time.Second)
+	// botService.RunAction(trash.NewAction(), 5*time.Second)
+	// botService.RunAction(polls.NewAction(), 10*time.Second)
+	botService.RunAction(rollsassign.NewAction(), 10*time.Second)
 
 	// ожидание закрытия программы
 	stopch := make(chan os.Signal, 1)

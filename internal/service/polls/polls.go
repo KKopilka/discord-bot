@@ -86,7 +86,6 @@ func createPoll(goBot *discordgo.Session, messageChannelID string, content strin
 	if err := goBot.MessageReactionAdd(botMessage.ChannelID, botMessage.ID, "\U0001F44D"); err != nil {
 		return err
 	}
-
 	if err := goBot.MessageReactionAdd(botMessage.ChannelID, botMessage.ID, "\U0001F44E"); err != nil {
 		return err
 	}
