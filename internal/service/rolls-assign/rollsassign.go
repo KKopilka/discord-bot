@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/KKopilka/discord-bot/internal/service"
+	ramsg "github.com/KKopilka/discord-bot/internal/service/rolls-assign/message"
 	"github.com/bwmarrin/discordgo"
 	emj "github.com/enescakir/emoji"
 )
+
+var roleAssignMessages = make(map[string][]*ramsg.RoleAssignMessage)
 
 func NewAction() service.Action {
 	return processGuilds
@@ -18,7 +20,7 @@ func NewAction() service.Action {
 func processGuilds(s *service.Service) error {
 	for _, guild := range s.BotGuilds() {
 		// fmt.Println(guild.Name, guild.ID)
-		if err := checkChannels(s.BotSession(), guild.ID); err != nil {
+		if err := checkChannels(s, guild.ID); err != nil {
 			fmt.Println(err.Error())
 		}
 	}
@@ -26,7 +28,12 @@ func processGuilds(s *service.Service) error {
 }
 
 func IgnoreChannel(channelID string) bool {
-	if channelID == "" || channelID != "1049105231402766356" {
+	if channelID == "1049105231402766356" ||
+		channelID == "1001918395807186964" {
+		return false
+	}
+
+	if channelID == "" {
 		return true
 	}
 
@@ -84,7 +91,19 @@ func searchMessage(goBot *discordgo.Session, channel *discordgo.Channel, substr 
 
 }
 
-func checkChannels(goBot *discordgo.Session, guildID string) error {
+func AddRoleAssignMessage(guildID string, rm *ramsg.RoleAssignMessage) {
+	roleAssignMessages[guildID] = append(roleAssignMessages[guildID], rm)
+}
+
+// func ReactOn(i interface{}) {
+// 	if m, ok := i.(*discordgo.MessageReactionAdd); ok {
+
+// 	}
+// }
+
+func checkChannels(s *service.Service, guildID string) error {
+	goBot := s.BotSession()
+
 	channels, err := goBot.GuildChannels(guildID)
 
 	if err != nil {
@@ -98,11 +117,14 @@ func checkChannels(goBot *discordgo.Session, guildID string) error {
 			if message := SearchMessage(goBot, channel, "#role-a$$ign", ""); message != nil {
 				// Нашли сообщение
 				fmt.Println("Found message:", message.ID, ">>", message.Content)
-				rm := ParseRoleAssignMessage(message.Content)
+				rm := ramsg.ParseRoleAssignMessage(message.Content)
 				if rm == nil {
 					fmt.Println("RoleAssign config not found in message:", message.ID)
 					continue
 				}
+
+				// AddRoleAssignMessage(guildID, rm)
+
 				for _, roleConf := range rm.Roles {
 					em := emj.Parse(roleConf.EmojiChar)
 					usrRoleReact, err := goBot.MessageReactions(message.ChannelID, message.ID, em, 100, "", "")
@@ -122,6 +144,7 @@ func checkChannels(goBot *discordgo.Session, guildID string) error {
 					for _, gRole := range guildRoles {
 						if roleConf.Name == gRole.Name {
 							reactRole = gRole
+							break
 						}
 					}
 
@@ -168,80 +191,4 @@ func checkChannels(goBot *discordgo.Session, guildID string) error {
 	}
 
 	return nil
-}
-
-type RoleConf struct {
-	EmojiChar string
-	Emoji     string
-	Name      string
-	Color     string
-}
-type RoleAssignMessage struct {
-	Roles []RoleConf
-}
-
-// replaceEmojiStr replace emoji char with \uXXXXXXXX formatted string.
-func replaceEmojiStr(emoji string) string {
-	//sanitization
-	// re := regexp.MustCompile(`[#*0-9]\x{FE0F}?\x{20E3}|©\x{FE0F}?|...`)
-	// omji := re.Find(emoji)
-	r, _ := utf8.DecodeRuneInString(emoji)
-
-	return fmt.Sprintf("\\U%08X", r)
-
-	// out := ""
-	// for _, r := range omji {
-
-	// 	out += fmt.Sprintf("\\u%08X", r2)
-	// }
-	// // conveting
-	// return out
-}
-
-func ParseRoleAssignMessage(content string) *RoleAssignMessage {
-	lines := strings.Split(content, "\n")
-	r := &RoleAssignMessage{
-		Roles: make([]RoleConf, 0),
-	}
-
-	for _, line := range lines {
-		if strings.Contains(line, "-") {
-			roleConfStr := strings.Split(line, "-")
-			for k, v := range roleConfStr {
-				roleConfStr[k] = strings.TrimSpace(v)
-			}
-			// detect emoji
-			emoji := replaceEmojiStr(roleConfStr[0])
-			fmt.Println("emoji(", roleConfStr[0], ")", emoji)
-			// TODO: check emoji
-
-			// detect color (hash)
-			if !strings.Contains(roleConfStr[1], "#") {
-				// no role color
-				continue
-			}
-
-			ncCfg := strings.Split(roleConfStr[1], "#")
-			if len(ncCfg[0]) == 0 {
-				// no role name
-				continue
-			}
-			if len(ncCfg[1]) == 0 {
-				// no role color
-				continue
-			}
-			// TODO: check color
-
-			roleCfg := RoleConf{
-				EmojiChar: roleConfStr[0],
-				Emoji:     string(emoji),
-				Name:      ncCfg[0],
-				Color:     ncCfg[1],
-			}
-
-			r.Roles = append(r.Roles, roleCfg)
-		}
-	}
-
-	return r
 }

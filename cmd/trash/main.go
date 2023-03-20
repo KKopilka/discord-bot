@@ -23,7 +23,7 @@ func main() {
 
 	fmt.Println("Configuration readed successfully. Create and start bot service.", discordBotToken, "lol")
 	// 2. Структура сервиса бота пакет service
-	botService, err := service.New(discordBotToken, true)
+	botService, err := service.New(discordBotToken, false)
 	if err != nil {
 		fmt.Println(err.Error())
 		return

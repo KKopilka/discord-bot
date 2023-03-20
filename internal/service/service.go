@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/KKopilka/discord-bot/internal/commands"
+	ramsg "github.com/KKopilka/discord-bot/internal/service/rolls-assign/message"
 	"github.com/bwmarrin/discordgo"
+	emj "github.com/enescakir/emoji"
 )
 
 type Service struct {
@@ -42,6 +44,70 @@ func New(botToken string, debug bool) (*Service, error) {
 	// Maybe Start() method ? ---->
 	fmt.Println("Binding bot command handlers")
 	commands.BindCommandHandlers(service.botSession)
+	service.botSession.AddHandler(func(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
+		fmt.Println(
+			"guildID:", m.GuildID,
+			"channelID:", m.ChannelID,
+			"messageID:", m.MessageID,
+			"emoji:", m.Emoji.ID, m.Emoji.Name,
+		)
+		message, err := service.botSession.ChannelMessage(m.ChannelID, m.MessageID)
+		if err != nil {
+			fmt.Println("ChannelMessage err:", err)
+			return
+		}
+
+		rm := ramsg.ParseRoleAssignMessage(message.Content)
+		if rm == nil {
+			fmt.Println("RoleAssign config not found in message:", message.ID)
+			return
+		}
+
+		var rCfg *ramsg.RoleConf
+		// find role by emoji
+		for _, roleConf := range rm.Roles {
+			if em := emj.Parse(roleConf.EmojiChar); em == m.Emoji.APIName() {
+				// role found
+				rCfg = &roleConf
+				break
+			} else {
+				fmt.Println("emoji:", m.Emoji, "em:", em)
+			}
+		}
+
+		if rCfg == nil {
+			// role not found
+			fmt.Println("role not found")
+			return
+		}
+
+		guildRoles, err := goBot.GuildRoles(m.GuildID)
+		if err != nil {
+			fmt.Println("GuildRoles err:", err)
+			return
+		}
+
+		var assignRole *discordgo.Role
+		for _, gRole := range guildRoles {
+			if gRole.Name == rCfg.Name {
+				assignRole = gRole
+			}
+		}
+
+		if assignRole == nil {
+			// assignRole not found
+			fmt.Println("assignRole not found")
+			return
+		}
+
+		if err := goBot.GuildMemberRoleAdd(m.GuildID, m.UserID, assignRole.ID); err != nil {
+			fmt.Println("GuildMemberRoleAdd err:", err)
+		} else {
+			fmt.Println("Successfully added role", assignRole.ID, assignRole.Name, "to user", m.UserID, m.Member.User.Username)
+		}
+
+	})
+
 	fmt.Println("Running bot session")
 	err = service.botSession.Open()
 	if err != nil {
